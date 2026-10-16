@@ -54,6 +54,14 @@
 .result-count { display: grid; min-width: 21px; height: 18px; place-items: center; border-radius: 5px; background: #f2efff; color: #7253db; font: 600 9px 'DM Sans', sans-serif; }
 .zip-button { min-height: 33px; font-size: 10px; }
 .zip-button > span { font-size: 15px; }
+.natural-search { margin-bottom: 10px; padding: 11px; border: 1px solid #efeff4; border-radius: 8px; background: #fbfbfd; }
+.natural-search > label { display: block; margin-bottom: 6px; color: #777589; font-size: 9px; font-weight: 600; }
+.natural-search-controls { display: flex; gap: 7px; }
+.natural-search-controls input { min-width: 0; min-height: 34px; flex: 1; padding: 0 10px; border: 1px solid #ecebf1; border-radius: 6px; outline: none; background: #fff; color: #545267; font-size: 10px; }
+.natural-search-controls input:focus { border-color: #a792e9; box-shadow: 0 0 0 3px rgba(114,83,219,.08); }
+.natural-search-controls .button { min-height: 34px; padding: 0 13px; font-size: 10px; }
+.natural-search-message { margin: 6px 0 0; color: #9694a4; font-size: 9px; }
+.natural-search-message.error { color: #c45b65; }
 .filter-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; padding: 10px; border: 1px solid #efeff4; border-radius: 8px; background: #fbfbfd; }
 .search-tags { min-width: 100%; display: flex; flex-direction: column; gap: 5px; color: #777589; font-size: 9px; }
 .search-tags .tag-entry { min-height: 33px; }
@@ -120,6 +128,7 @@
 .tag-chip { display: inline-flex; align-items: center; gap: 5px; padding: 4px 6px 4px 8px; border-radius: 5px; background: #f2efff; color: #6d52c2; font-size: 9px; }
 .tag-chip button { border: 0; padding: 0; background: transparent; color: #9484c8; font-size: 13px; line-height: 1; cursor: pointer; }
 .field-hint { color: #aaa8b7; font-size: 9px; }
+.auto-tag-message { min-height: 10px; color: #777589; font-size: 9px; }
 .suggestion { margin-left: 5px; padding: 3px 5px; border: 0; border-radius: 4px; background: #f6f5fa; color: #77748a; font-size: 8px; cursor: pointer; }
 .suggestion:hover { background: #eeeaff; color: #6d52c2; }
 .form-footer { display: flex; align-items: center; justify-content: space-between; margin-top: 20px; padding-top: 17px; border-top: 1px solid #f0eff4; }
@@ -204,6 +213,9 @@
   .panel-heading h2 { font-size: 12px; }
   .panel-heading p { font-size: 9px; }
   .zip-button { min-height: 30px; padding: 0 8px; font-size: 9px; }
+  .natural-search { padding: 9px; }
+  .natural-search-controls { align-items: stretch; }
+  .natural-search-controls .button { padding: 0 9px; }
   .filter-bar { display: grid; grid-template-columns: 1fr 1fr; }
   .search-tags { grid-column: 1 / -1; }
   .filter-select select { width: 100%; }

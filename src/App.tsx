@@ -14,6 +14,7 @@ import { API_BASE_URL, clearApiToken, getApiToken } from './services/api'
 import SearchFilters from './components/documents/SearchFilters'
 import DocumentList from './components/documents/DocumentList'
 import DocumentPreview from './components/documents/DocumentPreview'
+import NaturalLanguageSearch from './components/documents/NaturalLanguageSearch'
 import { formatFileSize } from './utils/formatFileSize'
 import './App.css'
 
@@ -253,6 +254,7 @@ const App = () => {
                   <span>↓</span> {zipBusy ? 'Preparing ZIP…' : 'Download all'}
                 </button>
               </div>
+              <NaturalLanguageSearch onApply={setFilters} />
               <SearchFilters
                 filters={filters}
                 categories={visibleCategories}
