@@ -75,9 +75,8 @@ const UploadForm = memo(({ onUpload, isUploading, existingTags }: UploadFormProp
         <div>
           <span className="eyebrow">DOCUMENT INTAKE</span>
           <h2>Upload a document</h2>
-          <p>Add a file and its details to your secure workspace.</p>
+          <p>Add a file and its details.</p>
         </div>
-        <span className="secure-note"><span className="secure-dot" /> Private workspace</span>
       </div>
 
       <button
@@ -161,7 +160,6 @@ const UploadForm = memo(({ onUpload, isUploading, existingTags }: UploadFormProp
 
       {error && <p className="form-error" role="alert">{error}</p>}
       <div className="form-footer">
-        <span className="field-hint">Your files are stored securely and only visible to you.</span>
         <button className="button button-primary" type="submit" disabled={isUploading}>
           {isUploading ? 'Saving…' : 'Upload document'} <span aria-hidden="true">→</span>
         </button>

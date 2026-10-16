@@ -34,7 +34,7 @@ export type UploadInput = z.infer<typeof uploadSchema>
 export type StoredDocument = DocumentRecord & { fileBlob?: Blob; fileUrl?: string }
 
 export const categories = {
-  Personal: ['John Smith', 'Tom Wilson', 'Emily Chen', 'Ayesha Khan'],
+  Personal: ['John Smith', 'Tom Wilson', 'Emily Chen', 'Riya Patel'],
   Professional: ['Accounts', 'Human Resources', 'Information Technology', 'Finance', 'Legal'],
 } as const
 

@@ -28,8 +28,8 @@ const UserRegistration = () => {
     <section className="admin-panel">
       <div className="section-heading">
         <div>
-          <span className="eyebrow">ADMINISTRATION</span>
-          <h2>Create a user</h2>
+          <span className="eyebrow">REGISTER</span>
+          <h2>Register a user</h2>
           <p>Set up a username and password for a new member.</p>
         </div>
         <span className="admin-avatar">♙</span>

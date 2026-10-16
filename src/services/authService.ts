@@ -33,7 +33,7 @@ export const authService = {
     if (!response.status) throw new Error(response.message ?? response.data ?? 'Could not send OTP.')
   },
 
-  async validateOtp(mobileNumber: string, otp: string): Promise<{ userName: string }> {
+  async validateOtp(mobileNumber: string, otp: string): Promise<void> {
     const body = otpValidationSchema.parse({ mobile_number: mobileNumber, otp })
     const response = otpValidationResponseSchema.parse(
       await apiCall(`${API_BASE_URL}/validateOTP`, { method: 'POST', body }),
@@ -45,6 +45,5 @@ export const authService = {
     const user = authenticatedUserSchema.parse(response.data)
     saveApiToken(user.token)
     saveApiUserId(user.user_id)
-    return { userName: user.user_name }
   },
 }

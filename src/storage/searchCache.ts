@@ -10,6 +10,14 @@ export const cacheSearchResults = (documents: DocumentRecord[]) => {
   }
 }
 
+export const clearCachedSearchResults = () => {
+  try {
+    localStorage.removeItem(cacheKey)
+  } catch (error) {
+    console.warn('Unable to clear cached search results.', error)
+  }
+}
+
 export const getCachedSearchResults = (): DocumentRecord[] | null => {
   try {
     const raw = localStorage.getItem(cacheKey)
