@@ -1,75 +1,83 @@
-# React + TypeScript + Vite
+# Elevate Documents
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+A responsive React + TypeScript document-management workspace. The interface supports OTP-style sign-in, document upload and tagging, category/date search, previews, downloads, bulk ZIP export, and a static user-creation form.
 
-Currently, two official plugins are available:
+## Run locally
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
-
-## React Compiler
-
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-
+```bash
+npm install
+npm run dev
 ```
 
-You can also install [eslint-plugin-react-x](https://npmx.dev/package/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://npmx.dev/package/eslint-plugin-react-dom) for React-specific lint rules:
+## Validate
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
-
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-
+```bash
+npm run build
+npm run lint
 ```
+
+There is no separate unit-test runner configured yet. The production TypeScript/Vite build and ESLint are the current validation commands.
+
+## Project structure
+
+```text
+src/
+├── components/
+│   ├── Login.tsx
+│   ├── common/
+│   │   └── OfflineBanner.tsx
+│   └── documents/
+│       ├── DocumentList.tsx
+│       ├── DocumentPreview.tsx
+│       ├── SearchFilters.tsx
+│       └── UploadForm.tsx
+├── hooks/
+│   ├── useDebounce.ts
+│   └── useNetworkStatus.ts
+├── services/
+│   ├── api.ts
+│   ├── authService.ts
+│   ├── documentService.ts
+│   └── tagService.ts
+├── storage/
+│   ├── indexedDb.ts
+│   └── searchCache.ts
+├── types/
+│   ├── documents.ts
+│   └── search.ts
+├── utils/
+├── workers/
+├── App.tsx
+└── main.tsx
+```
+
+## Features
+
+- Personal and Professional categories with dependent person/department choices.
+- PDF and image upload (20 MB maximum), document dates, suggested/reusable tags, and remarks.
+- Search by name or tag, category, person/department, and date range.
+- Virtualized document results using TanStack Virtual.
+- Image/PDF preview states, individual downloads, and bulk ZIP generation in a native Web Worker using fflate.
+- Optimistic upload, tag, and delete updates using TanStack Query, with rollback and visible errors when a mutation fails.
+- Zod runtime validation for upload data, saved document records, tags, login input, and admin form data.
+- IndexedDB document/file persistence with LocalStorage caching of up to 200 recent search results.
+- Responsive workspace navigation, offline status, and API-backed OTP sign-in.
+
+## Backend integration
+
+OTP and authenticated document APIs use the supplied Allsoft Postman collection:
+
+- `POST /generateOTP` and `POST /validateOTP`
+- `POST /searchDocumentEntry`
+- `POST /saveDocumentEntry` (multipart `file` and JSON `data`)
+- `POST /documentTags`
+
+The API host is `https://apis.allsoft.co/api/documentManagement`. The validated OTP response token is stored in browser LocalStorage and sent as the `token` request header. The search response is runtime-validated and normalized from the supplied API fields; tag suggestions accept the API's `label` field. The uploader sends `major_head`, `minor_head`, `document_date` (`DD-MM-YYYY`), `document_remarks`, tag objects, and `user_id` (from the OTP response, or the `nitin` example in the collection).
+
+The supplied collection has no document deletion or standalone tag-update request. Those actions work as optimistic local-demo mutations when signed out; while authenticated, they fail visibly and roll back rather than pretending the server saved the change. The static administrator form also does not create backend users because no user-creation endpoint was provided.
+
+When signed out, the app seeds sample documents into IndexedDB and persists local uploads. Authenticated searches use the backend; cached results remain available during offline network drops. No API secret is bundled.
+
+## Deployment
+
+The root `vercel.json` rewrites client-side routes to `index.html`. Import this repository into Vercel or run `vercel` from the project directory. No environment variables are needed.
