@@ -1,7 +1,6 @@
 import { z } from 'zod'
 import {
   documentSchema,
-  tagRequestSchema,
   uploadSchema,
   type StoredDocument,
   type UploadInput,
@@ -14,11 +13,23 @@ import { API_BASE_URL, apiCall, authenticatedHeaders, getApiToken, getApiUserId 
 const searchFiltersSchema = z.object({
   category: z.string(),
   minorHead: z.string(),
-  search: z.string(),
+  tags: z.array(z.string().trim().min(1).max(100)),
   from: z.string(),
   to: z.string(),
 }) satisfies z.ZodType<SearchFiltersState>
 const rawRecordSchema = z.record(z.string(), z.unknown())
+const documentSearchRequestSchema = z.object({
+  major_head: z.string(),
+  minor_head: z.string(),
+  from_date: z.string(),
+  to_date: z.string(),
+  tags: z.array(z.object({ tag_name: z.string().min(1) })),
+  uploaded_by: z.string(),
+  start: z.number().int().nonnegative(),
+  length: z.number().int().positive(),
+  filterId: z.string(),
+  search: z.object({ value: z.string() }),
+})
 
 const stringField = (record: Record<string, unknown>, keys: string[]) => {
   for (const key of keys) {
@@ -45,6 +56,19 @@ const normalizeDate = (value: string) => {
   if (dmy) return `${dmy[3]}-${dmy[2]}-${dmy[1]}`
   const parsed = new Date(value)
   return Number.isNaN(parsed.valueOf()) ? '' : parsed.toISOString().slice(0, 10)
+}
+
+const normalizeMimeType = (value: string, inferredMimeType: string) => {
+  const normalized = value.trim().toLowerCase()
+  if (normalized === 'pdf' || normalized === '.pdf') return 'application/pdf'
+  if (normalized.startsWith('image/')) return normalized
+  if (normalized === 'jpg' || normalized === '.jpg' || normalized === 'jpeg' || normalized === '.jpeg') {
+    return 'image/jpeg'
+  }
+  if (normalized === 'png' || normalized === '.png') return 'image/png'
+  if (normalized === 'gif' || normalized === '.gif') return 'image/gif'
+  if (normalized === 'webp' || normalized === '.webp') return 'image/webp'
+  return value.trim() || inferredMimeType
 }
 
 const findRecords = (value: unknown, depth = 0): Record<string, unknown>[] | null => {
@@ -94,7 +118,10 @@ const normalizeDocument = (raw: Record<string, unknown>, index: number): StoredD
         : extension === 'webp' ? 'image/webp'
           : ['jpg', 'jpeg'].includes(extension ?? '') ? 'image/jpeg'
             : 'application/octet-stream'
-  const mimeType = stringField(raw, ['mime_type', 'content_type', 'file_type']) || inferredMimeType
+  const mimeType = normalizeMimeType(
+    stringField(raw, ['mime_type', 'content_type', 'file_type']),
+    inferredMimeType,
+  )
   return {
     ...documentSchema.parse({
       id: stringField(raw, ['id', 'document_id', 'document_entry_id', 'entry_id']) || `api-${index}`,
@@ -123,29 +150,36 @@ const waitForMockRequest = async () => {
   if (!navigator.onLine) throw new Error('You are offline. Your changes were rolled back.')
 }
 
+const resolveDocumentFileUrl = (fileUrl: string) => (
+  /^https?:\/\//i.test(fileUrl)
+    ? fileUrl
+    : new URL(fileUrl.replace(/^\/+/, ''), `${API_BASE_URL}/`).toString()
+)
+
 export const documentService = {
   async list(filters: SearchFiltersState): Promise<StoredDocument[]> {
     const validatedFilters = searchFiltersSchema.parse(filters)
     if (getApiToken()) {
       try {
+        const body = documentSearchRequestSchema.parse({
+          major_head: validatedFilters.category,
+          minor_head: validatedFilters.minorHead,
+          from_date: toApiDate(validatedFilters.from),
+          to_date: toApiDate(validatedFilters.to),
+          tags: validatedFilters.tags
+            .map((tag_name) => tag_name.trim())
+            .filter(Boolean)
+            .map((tag_name) => ({ tag_name })),
+          uploaded_by: '',
+          start: 0,
+          length: 1000,
+          filterId: '',
+          search: { value: '' },
+        })
         const response = await apiCall(`${API_BASE_URL}/searchDocumentEntry`, {
           method: 'POST',
           headers: authenticatedHeaders(),
-          body: {
-            major_head: validatedFilters.category,
-            minor_head: validatedFilters.minorHead,
-            from_date: toApiDate(validatedFilters.from),
-            to_date: toApiDate(validatedFilters.to),
-            tags: validatedFilters.search
-              .split(/[,\s]+/)
-              .filter(Boolean)
-              .map((tag_name) => ({ tag_name })),
-            uploaded_by: '',
-            start: 0,
-            length: 1000,
-            filterId: '',
-            search: { value: validatedFilters.search },
-          },
+          body,
         })
         const records = findRecords(response)
         if (!records) throw new Error('The document search response did not contain a valid results list.')
@@ -160,16 +194,9 @@ export const documentService = {
         throw error
       }
     }
-
-    try {
-      return await indexedDb.listDocuments()
-    } catch (error) {
-      if (!navigator.onLine) {
-        const cached = getCachedSearchResults()
-        if (cached) return cached
-      }
-      throw error
-    }
+    const cached = getCachedSearchResults()
+    if (!navigator.onLine && cached) return cached
+    throw new Error('Sign in to search documents.')
   },
 
   async add(input: UploadInput): Promise<StoredDocument> {
@@ -227,27 +254,9 @@ export const documentService = {
     return stored
   },
 
-  async addTag(id: string, tag: string): Promise<void> {
-    const validated = tagRequestSchema.parse({ id, tag })
-    if (getApiToken()) {
-      throw new Error('The provided API collection does not include a request for adding a tag by document.')
-    }
-    await waitForMockRequest()
-    const current = await indexedDb.getDocument(validated.id)
-    if (!current) throw new Error('Document no longer exists.')
-    await indexedDb.saveDocument({
-      ...current,
-      tags: [...new Set([...current.tags, validated.tag])],
-    })
-  },
-
-  async remove(id: string): Promise<void> {
-    const validatedId = documentSchema.shape.id.parse(id)
-    if (getApiToken()) {
-      throw new Error('The provided API collection does not include a document deletion request.')
-    }
-    await waitForMockRequest()
-    await indexedDb.deleteDocument(validatedId)
+  getFileUrl(document: StoredDocument): string {
+    if (!document.fileUrl) throw new Error('The API search response did not include a file URL for this document.')
+    return resolveDocumentFileUrl(document.fileUrl)
   },
 
   async getFile(document: StoredDocument): Promise<Blob> {
@@ -261,10 +270,19 @@ export const documentService = {
         { type: document.mimeType },
       )
     }
-    const url = /^https?:\/\//i.test(document.fileUrl)
-      ? document.fileUrl
-      : new URL(document.fileUrl.replace(/^\/+/, ''), `${API_BASE_URL}/`).toString()
-    const response = await fetch(url, { headers: authenticatedHeaders() })
+    const url = resolveDocumentFileUrl(document.fileUrl)
+    const requestHeaders = new URL(url).origin === new URL(API_BASE_URL).origin
+      ? authenticatedHeaders()
+      : undefined
+    let response: Response
+    try {
+      response = await fetch(url, requestHeaders ? { headers: requestHeaders } : undefined)
+    } catch (error) {
+      if (error instanceof TypeError) {
+        throw new Error('The browser could not read this file URL. Check the file host CORS settings before creating a ZIP.', { cause: error })
+      }
+      throw error
+    }
     if (!response.ok) throw new Error(`Could not download the document (HTTP ${response.status}).`)
     return response.blob()
   },

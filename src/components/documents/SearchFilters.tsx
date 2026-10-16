@@ -1,11 +1,11 @@
-import { memo, type RefObject } from 'react'
+import { memo } from 'react'
 import type { SearchFiltersState } from '../../types/search'
+import TagInput from '../common/TagInput'
 
 type SearchFiltersProps = {
   filters: SearchFiltersState
   categories: string[]
   minorHeads: string[]
-  searchRef: RefObject<HTMLInputElement | null>
   onChange: (filters: SearchFiltersState) => void
   onClear: () => void
 }
@@ -14,25 +14,14 @@ const SearchFilters = memo(({
   filters,
   categories,
   minorHeads,
-  searchRef,
   onChange,
   onClear,
 }: SearchFiltersProps) => (
   <div className="filter-bar">
-    <label className="search-field">
-      <span aria-hidden="true">⌕</span>
-      <input
-        ref={searchRef}
-        aria-label="Search documents or tags"
-        placeholder="Search documents or tags…"
-        value={filters.search}
-        onChange={(event) => onChange({ ...filters, search: event.target.value })}
-      />
-      <kbd>⌘ K</kbd>
-    </label>
     <label className="filter-select">
       <span className="sr-only">Category</span>
       <select
+        aria-label="Category"
         value={filters.category}
         onChange={(event) => onChange({ ...filters, category: event.target.value, minorHead: '' })}
       >
@@ -43,12 +32,23 @@ const SearchFilters = memo(({
     <label className="filter-select">
       <span className="sr-only">Person or department</span>
       <select
+        aria-label="Person or department"
         value={filters.minorHead}
         onChange={(event) => onChange({ ...filters, minorHead: event.target.value })}
       >
-        <option value="">All departments</option>
+        <option value="">All people or departments</option>
         {minorHeads.map((head) => <option key={head}>{head}</option>)}
       </select>
+    </label>
+    <label className="search-tags">
+      <span>Tags</span>
+      <TagInput
+        tags={filters.tags}
+        onChange={(tags) => onChange({ ...filters, tags })}
+        inputLabel="Filter by tags"
+        placeholder={filters.tags.length ? 'Add another…' : 'Add tags…'}
+        fetchOnMount
+      />
     </label>
     <label className="date-filter">
       <span>From</span>
@@ -72,7 +72,7 @@ const SearchFilters = memo(({
       className="clear-filters"
       type="button"
       onClick={onClear}
-      disabled={Object.values(filters).every((value) => !value)}
+      disabled={!filters.category && !filters.minorHead && !filters.tags.length && !filters.from && !filters.to}
     >
       Clear
     </button>

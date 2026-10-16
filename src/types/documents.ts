@@ -12,11 +12,6 @@ export const documentSchema = z.object({
   remarks: z.string(),
 })
 
-export const tagRequestSchema = z.object({
-  id: z.string().min(1),
-  tag: z.string().trim().min(1).max(40),
-})
-
 export const uploadSchema = z.object({
   file: z.instanceof(File).refine(
     (file) => file.type === 'application/pdf' || file.type.startsWith('image/'),

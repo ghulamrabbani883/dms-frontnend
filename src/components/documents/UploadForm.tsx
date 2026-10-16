@@ -1,63 +1,21 @@
-import { memo, useRef, useState, type FormEvent, type KeyboardEvent } from 'react'
-import { useQuery } from '@tanstack/react-query'
-import { useDebounce } from '../../hooks/useDebounce'
-import { tagService } from '../../services/tagService'
+import { memo, useRef, useState, type FormEvent } from 'react'
 import { categories, uploadSchema, type UploadInput } from '../../types/documents'
-import { getApiToken } from '../../services/api'
+import TagInput from '../common/TagInput'
 
 type UploadFormProps = {
   onUpload: (input: UploadInput) => void
   isUploading: boolean
-  existingTags: string[]
 }
 
-const UploadForm = memo(({ onUpload, isUploading, existingTags }: UploadFormProps) => {
+const UploadForm = memo(({ onUpload, isUploading }: UploadFormProps) => {
   const [category, setCategory] = useState<'Personal' | 'Professional'>('Professional')
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10))
   const [minorHead, setMinorHead] = useState('')
   const [tags, setTags] = useState<string[]>([])
-  const [tagInput, setTagInput] = useState('')
   const [remarks, setRemarks] = useState('')
   const [file, setFile] = useState<File | null>(null)
   const [error, setError] = useState('')
   const fileInput = useRef<HTMLInputElement>(null)
-  const debouncedTagInput = useDebounce(tagInput.trim(), 300)
-  const tagQuery = useQuery({
-    queryKey: ['document-tags', debouncedTagInput],
-    queryFn: () => tagService.search(debouncedTagInput),
-    enabled: Boolean(getApiToken()) && debouncedTagInput.length > 1,
-    staleTime: 30_000,
-  })
-  const tagSuggestions = [...new Set([
-    ...(tagQuery.data ?? []),
-    ...existingTags,
-    'finance',
-    'hr',
-    'legal',
-    'personal',
-    'project',
-    '2026',
-  ])]
-    .filter((tag) => !tags.includes(tag)
-      && (!debouncedTagInput || tag.toLowerCase().includes(debouncedTagInput.toLowerCase())))
-
-  const addTag = (value: string) => {
-    const cleaned = value.trim().replace(/^#/, '')
-    if (cleaned && !tags.some((tag) => tag.toLowerCase() === cleaned.toLowerCase())) {
-      setTags((current) => [...current, cleaned])
-    }
-    setTagInput('')
-  }
-
-  const handleTagKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
-    if (event.key === 'Enter' || event.key === ',') {
-      event.preventDefault()
-      addTag(tagInput)
-    } else if (event.key === 'Backspace' && !tagInput && tags.length) {
-      setTags((current) => current.slice(0, -1))
-    }
-  }
-
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     const result = uploadSchema.safeParse({ file, date, category, minorHead, tags, remarks })
@@ -131,26 +89,13 @@ const UploadForm = memo(({ onUpload, isUploading, existingTags }: UploadFormProp
         </label>
         <label className="field field-wide">
           <span>Tags</span>
-          <div className="tag-entry" onClick={(event) => event.currentTarget.querySelector('input')?.focus()}>
-            {tags.map((tag) => (
-              <span className="tag-chip" key={tag}>
-                {tag}
-                <button type="button" aria-label={`Remove ${tag} tag`} onClick={() => setTags((current) => current.filter((item) => item !== tag))}>×</button>
-              </span>
-            ))}
-            <input
-              value={tagInput}
-              placeholder={tags.length ? 'Add another…' : 'Type a tag and press Enter'}
-              onChange={(event) => setTagInput(event.target.value)}
-              onKeyDown={handleTagKeyDown}
-            />
-          </div>
-          <span className="field-hint">
-            {tagQuery.isError && <span role="status">Could not fetch saved tags. </span>}
-            Suggested: {tagSuggestions.slice(0, 4).map((tag) => (
-            <button className="suggestion" type="button" key={tag} onClick={() => addTag(tag)}>+ {tag}</button>
-            ))}
-          </span>
+          <TagInput
+            tags={tags}
+            onChange={setTags}
+            inputLabel="Add document tags"
+            placeholder={tags.length ? 'Add another…' : 'Type a tag and press Enter'}
+            fetchOnMount
+          />
         </label>
         <label className="field field-wide">
           <span>Remarks <small>Optional</small></span>

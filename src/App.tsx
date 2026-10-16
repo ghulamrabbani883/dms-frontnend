@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import UploadForm from './components/documents/UploadForm'
 import UserRegistration from './components/administration/UserRegistration'
@@ -10,12 +10,11 @@ import { cacheSearchResults, clearCachedSearchResults, getCachedSearchResults } 
 import { type StoredDocument, type UploadInput } from './types/documents'
 import { initialSearchFilters, type SearchFiltersState } from './types/search'
 import { useNetworkStatus } from './hooks/useNetworkStatus'
-import { clearApiToken, getApiToken } from './services/api'
+import { API_BASE_URL, clearApiToken, getApiToken } from './services/api'
 import SearchFilters from './components/documents/SearchFilters'
 import DocumentList from './components/documents/DocumentList'
 import DocumentPreview from './components/documents/DocumentPreview'
 import { formatFileSize } from './utils/formatFileSize'
-import { useDebounce } from './hooks/useDebounce'
 import './App.css'
 
 const initialFilters = initialSearchFilters
@@ -31,17 +30,21 @@ const App = () => {
   const [toast, setToast] = useState('')
   const [uploadVersion, setUploadVersion] = useState(0)
   const [zipBusy, setZipBusy] = useState(false)
-  const searchRef = useRef<HTMLInputElement>(null)
 
-  const debouncedSearch = useDebounce(filters.search, 300)
   const queryFilters = useMemo(() => ({
     category: filters.category,
     minorHead: filters.minorHead,
-    search: debouncedSearch,
+    tags: filters.tags,
     from: filters.from,
     to: filters.to,
-  }), [filters.category, filters.minorHead, filters.from, filters.to, debouncedSearch])
-  const hasFilters = Object.values(queryFilters).some(Boolean)
+  }), [filters.category, filters.minorHead, filters.tags, filters.from, filters.to])
+  const hasFilters = Boolean(
+    queryFilters.category
+    || queryFilters.minorHead
+    || queryFilters.tags.length
+    || queryFilters.from
+    || queryFilters.to,
+  )
   const allDocumentsQuery = useQuery({
     queryKey: ['documents', 'all'],
     queryFn: () => documentService.list(initialFilters),
@@ -63,10 +66,6 @@ const App = () => {
   )
   const documents = documentsQuery.data ?? emptyDocuments
   const allDocuments = allDocumentsQuery.data ?? emptyDocuments
-  const existingTags = useMemo(
-    () => Array.from(new Set(allDocuments.flatMap((document) => document.tags))),
-    [allDocuments],
-  )
 
   const uploadMutation = useMutation({
     mutationFn: (input: UploadInput) => documentService.add(input),
@@ -101,46 +100,7 @@ const App = () => {
     onSettled: () => queryClient.invalidateQueries({ queryKey: ['documents'] }),
   })
 
-  const deleteMutation = useMutation({
-    mutationFn: documentService.remove,
-    onMutate: async (id) => {
-      await queryClient.cancelQueries({ queryKey: ['documents'] })
-      const queryKey = currentDocumentsQueryKey
-      const previous = queryClient.getQueryData<StoredDocument[]>(queryKey)
-      queryClient.setQueryData<StoredDocument[]>(queryKey, (current = []) => current.filter((document) => document.id !== id))
-      return { previous, queryKey }
-    },
-    onError: (error, _id, context) => {
-      if (context?.previous) queryClient.setQueryData(context.queryKey, context.previous)
-      setToast(error instanceof Error ? error.message : 'Could not delete document.')
-    },
-    onSuccess: () => setToast('Document deleted.'),
-    onSettled: () => queryClient.invalidateQueries({ queryKey: ['documents'] }),
-  })
-
-  const tagMutation = useMutation({
-    mutationFn: ({ id, tag }: { id: string; tag: string }) => documentService.addTag(id, tag),
-    onMutate: async ({ id, tag }) => {
-      await queryClient.cancelQueries({ queryKey: ['documents'] })
-      const queryKey = currentDocumentsQueryKey
-      const previous = queryClient.getQueryData<StoredDocument[]>(queryKey)
-      queryClient.setQueryData<StoredDocument[]>(queryKey, (current = []) => current.map((document) => (
-        document.id === id && !document.tags.includes(tag)
-          ? { ...document, tags: [...document.tags, tag] }
-          : document
-      )))
-      return { previous, queryKey }
-    },
-    onError: (error, _variables, context) => {
-      if (context?.previous) queryClient.setQueryData(context.queryKey, context.previous)
-      setToast(error instanceof Error ? error.message : 'Could not save tag.')
-    },
-    onSuccess: () => setToast('Tag added.'),
-    onSettled: () => queryClient.invalidateQueries({ queryKey: ['documents'] }),
-  })
   const mutateUpload = uploadMutation.mutate
-  const mutateTag = tagMutation.mutate
-  const mutateDelete = deleteMutation.mutate
 
   useEffect(() => {
     if (toast) {
@@ -149,30 +109,13 @@ const App = () => {
     }
   }, [toast])
 
-  useEffect(() => {
-    const handleSearchShortcut = (event: KeyboardEvent) => {
-      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
-        event.preventDefault()
-        searchRef.current?.focus()
-      }
-    }
-    window.addEventListener('keydown', handleSearchShortcut)
-    return () => window.removeEventListener('keydown', handleSearchShortcut)
-  }, [])
-
   const filteredDocuments = useMemo(() => {
-    const searchTerm = queryFilters.search.trim().toLowerCase()
-    const searchTerms = searchTerm.split(/[,\s]+/).filter(Boolean)
     const results = documents.filter((document) => {
       const matchesCategory = !queryFilters.category || document.category === queryFilters.category
       const matchesHead = !queryFilters.minorHead || document.minorHead === queryFilters.minorHead
-      const matchesText = searchTerms.every((term) => (
-        document.name.toLowerCase().includes(term)
-        || document.tags.some((tag) => tag.toLowerCase().includes(term))
-      ))
       const matchesFrom = !queryFilters.from || document.date >= queryFilters.from
       const matchesTo = !queryFilters.to || document.date <= queryFilters.to
-      return matchesCategory && matchesHead && matchesText && matchesFrom && matchesTo
+      return matchesCategory && matchesHead && matchesFrom && matchesTo
     })
     return results.sort((first, second) => second.date.localeCompare(first.date))
   }, [documents, queryFilters])
@@ -183,6 +126,18 @@ const App = () => {
 
   const downloadDocument = useCallback(async (document: StoredDocument) => {
     try {
+      if (document.fileUrl) {
+        const fileUrl = documentService.getFileUrl(document)
+        if (new URL(fileUrl).origin !== new URL(API_BASE_URL).origin) {
+          const anchor = window.document.createElement('a')
+          anchor.href = fileUrl
+          anchor.download = document.name
+          anchor.target = '_blank'
+          anchor.rel = 'noopener noreferrer'
+          anchor.click()
+          return
+        }
+      }
       const blob = await documentService.getFile(document)
       const url = URL.createObjectURL(blob)
       const anchor = window.document.createElement('a')
@@ -196,22 +151,24 @@ const App = () => {
   }, [])
 
   const downloadAll = useCallback(async () => {
-    if (!filteredDocuments.length || zipBusy) return
+    if (!filteredDocuments.length) return
     setZipBusy(true)
-    const worker = new Worker(new URL('./workers/zip.worker.ts', import.meta.url), { type: 'module' })
+    let worker: Worker | undefined
     try {
       const files = await Promise.all(filteredDocuments.map(async (document) => {
         const fileBlob = await documentService.getFile(document)
         return { name: document.name, bytes: await fileBlob.arrayBuffer() }
       }))
+      const zipWorker = new Worker(new URL('./workers/zip.worker.ts', import.meta.url), { type: 'module' })
+      worker = zipWorker
       const archive = await new Promise<ArrayBuffer>((resolve, reject) => {
-        worker.onmessage = (event: MessageEvent<{ archive?: ArrayBuffer; error?: string }>) => {
+        zipWorker.onmessage = (event: MessageEvent<{ archive?: ArrayBuffer; error?: string }>) => {
           if (event.data.error) reject(new Error(event.data.error))
           else if (event.data.archive) resolve(event.data.archive)
           else reject(new Error('The ZIP worker returned an invalid response.'))
         }
-        worker.onerror = () => reject(new Error('The ZIP worker could not create the archive.'))
-        worker.postMessage({ files }, files.map(({ bytes }) => bytes))
+        zipWorker.onerror = () => reject(new Error('The ZIP worker could not create the archive.'))
+        zipWorker.postMessage({ files }, files.map(({ bytes }) => bytes))
       })
       const url = URL.createObjectURL(new Blob([archive], { type: 'application/zip' }))
       const anchor = window.document.createElement('a')
@@ -223,16 +180,12 @@ const App = () => {
     } catch (error) {
       setToast(error instanceof Error ? error.message : 'Could not create the ZIP archive.')
     } finally {
-      worker.terminate()
+      worker?.terminate()
       setZipBusy(false)
     }
-  }, [filteredDocuments, zipBusy])
+  }, [filteredDocuments])
 
   const handleUpload = useCallback((input: UploadInput) => mutateUpload(input), [mutateUpload])
-  const handleAddTag = useCallback((document: StoredDocument) => {
-    const tag = window.prompt(`Add a tag to “${document.name}”`)
-    if (tag?.trim()) mutateTag({ id: document.id, tag: tag.trim().replace(/^#/, '') })
-  }, [mutateTag])
 
   const resetFilters = useCallback(() => setFilters(initialFilters), [])
   const visibleCategories = useMemo(() => Array.from(new Set([
@@ -254,10 +207,6 @@ const App = () => {
   const handleDownload = useCallback(
     (document: StoredDocument) => void downloadDocument(document),
     [downloadDocument],
-  )
-  const handleDelete = useCallback(
-    (document: StoredDocument) => mutateDelete(document.id),
-    [mutateDelete],
   )
   const handleSignOut = useCallback(() => {
     clearApiToken()
@@ -300,7 +249,7 @@ const App = () => {
             <section className="documents-panel">
               <div className="panel-heading">
                 <div><h2>All documents <span className="result-count">{filteredDocuments.length}</span></h2><p>Search, preview and manage your files.</p></div>
-                <button className="button button-outline zip-button" onClick={downloadAll} disabled={!filteredDocuments.length || zipBusy}>
+                <button className="button button-outline zip-button" onClick={() => void downloadAll()} disabled={!filteredDocuments.length || zipBusy}>
                   <span>↓</span> {zipBusy ? 'Preparing ZIP…' : 'Download all'}
                 </button>
               </div>
@@ -308,7 +257,6 @@ const App = () => {
                 filters={filters}
                 categories={visibleCategories}
                 minorHeads={heads}
-                searchRef={searchRef}
                 onChange={setFilters}
                 onClear={resetFilters}
               />
@@ -324,8 +272,6 @@ const App = () => {
                 onShowCached={showCachedResults}
                 onPreview={setPreviewDocument}
                 onDownload={handleDownload}
-                onAddTag={handleAddTag}
-                onDelete={handleDelete}
               />
             </section>
           </section>
@@ -336,7 +282,7 @@ const App = () => {
             <div className="page-intro compact-intro">
               <div><span className="eyebrow">DOCUMENT INTAKE</span><h1>Upload documents</h1></div>
             </div>
-            <div className="upload-panel"><UploadForm key={uploadVersion} onUpload={handleUpload} isUploading={uploadMutation.isPending} existingTags={existingTags} /></div>
+            <div className="upload-panel"><UploadForm key={uploadVersion} onUpload={handleUpload} isUploading={uploadMutation.isPending} /></div>
           </section>
         )}
 

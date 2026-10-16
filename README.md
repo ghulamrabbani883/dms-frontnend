@@ -18,8 +18,8 @@ Open the local URL printed by Vite (usually `http://localhost:5173`). To stop th
 ## Features
 
 - **Upload and organize documents:** Upload PDF and image files with a document date, Personal or Professional category, a related person or department, reusable tags, and remarks.
-- **Find documents:** Search by name or tags and narrow results by category, person or department, and date range. Search input is debounced to avoid unnecessary updates while typing.
-- **Preview and download:** Preview supported PDFs and images, download individual files, or download the current results as a ZIP. ZIP creation runs in a Web Worker.
+- **Find documents:** Filter by category, person or department, reusable tag chips, and date range. Existing tag suggestions are fetched from the document-tags API.
+- **Preview and download:** Preview supported PDFs and images, download individual files, and bundle current results into a ZIP generated in a Web Worker. ZIP generation reads each file in the browser; backend file hosting must allow cross-origin reads (CORS) from the app's origin.
 - **Handle large result sets:** Document results are virtualized so the interface only renders the rows needed on screen.
 - **Keep working through connection issues:** The app shows network status and caches recent search results locally for authenticated sessions.
 - **Sign in with OTP:** Request and validate a one-time passcode through the Allsoft authentication API. The returned token is used for authenticated document requests.
@@ -34,7 +34,8 @@ src/
 │   ├── administration/
 │   │   └── UserRegistration.tsx
 │   ├── common/
-│   │   └── OfflineBanner.tsx
+│   │   ├── OfflineBanner.tsx
+│   │   └── TagInput.tsx
 │   ├── documents/
 │   │   ├── DocumentList.tsx
 │   │   ├── DocumentPreview.tsx
@@ -57,13 +58,23 @@ src/
 │   ├── indexedDb.ts
 │   └── searchCache.ts
 ├── types/
+│   ├── documents.ts
+│   └── search.ts
 ├── utils/
+│   └── formatFileSize.ts
 ├── workers/
+│   └── zip.worker.ts
+├── assets/
+│   ├── hero.png
+│   ├── react.svg
+│   └── vite.svg
+├── App.css
 ├── App.tsx
+├── index.css
 └── main.tsx
 ```
 
-`App.tsx` coordinates the document workflows. `Layout.tsx` and `Sidebar.tsx` provide the signed-in application shell and navigation, while focused components handle login, registration, and document tasks. API communication is kept in `services/`, browser persistence is handled by `storage/`, and Zod schemas validate API data and form input at runtime.
+`App.tsx` coordinates the document workflows. `Layout.tsx` and `Sidebar.tsx` provide the signed-in application shell and navigation, while focused components handle login, registration, tag entry, and document tasks. API communication is kept in `services/`, browser persistence is handled by `storage/`, shared data types and Zod schemas are in `types/`, and ZIP generation runs in `workers/zip.worker.ts`.
 
 ## Available commands
 
@@ -78,8 +89,10 @@ npm run preview  # Preview the production build locally
 
 The app uses the Allsoft Document Management API at `https://apis.allsoft.co/api/documentManagement` for OTP authentication, document search and upload, and tag suggestions. Enter a mobile number registered with the service; the backend determines whether OTP can be sent to that number. After successful OTP validation, the token is stored in browser LocalStorage and sent with authenticated requests.
 
-The provided API collection does not include endpoints for deleting documents, updating document tags, or creating users. Those actions are therefore not represented as successful backend operations: demo-mode changes are local, while unsupported authenticated mutations report an error and roll back.
+Document search uses `POST /searchDocumentEntry` with the collection's `major_head`, `minor_head`, `from_date`, `to_date`, `tags`, `uploaded_by`, `start`, `length`, `filterId`, and `search.value` fields. The interface filters by category, person or department, selected tags, and date range; it does not expose free-text search. Selected tags are sent as `{ "tag_name": "..." }` objects, with no blank placeholders, and `search.value` is sent as an empty string. The collection example uses `length: 10`; this app requests `length: 1000` so the virtualized list can render large result sets from one response.
 
-## Deployment
+Search and upload tag suggestions use the separate `POST /documentTags` endpoint with `{ "term": "..." }`. Tags are selected or entered as chips in both interfaces. Search sends selected tags with the document-search request; upload sends them as `{ "tag_name": "..." }` objects with the upload request.
 
-The included `vercel.json` rewrites client-side routes to `index.html`. Import the repository into Vercel or run the Vercel CLI from the project directory to deploy.
+The browser can preview and open pre-signed file links without CORS access. Creating a ZIP from backend-hosted files requires the browser to read each file's bytes; if the file host blocks cross-origin reads, the S3 bucket must allow the deployed site origin for `GET` requests. The app reports a clear error if the browser cannot read a file for ZIP creation. Pre-signed links can expire, in which case refresh the document search to obtain a new link.
+
+The provided API collection does not include endpoints for updating tags on existing documents or creating users. The registration form is a static demo and does not create users on the backend. Document deletion is not exposed in the interface.

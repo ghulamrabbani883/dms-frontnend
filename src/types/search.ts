@@ -1,7 +1,7 @@
 export type SearchFiltersState = {
   category: string
   minorHead: string
-  search: string
+  tags: string[]
   from: string
   to: string
 }
@@ -9,7 +9,7 @@ export type SearchFiltersState = {
 export const initialSearchFilters: SearchFiltersState = {
   category: '',
   minorHead: '',
-  search: '',
+  tags: [],
   from: '',
   to: '',
 }

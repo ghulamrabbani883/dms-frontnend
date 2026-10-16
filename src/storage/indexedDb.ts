@@ -62,18 +62,9 @@ export const indexedDb = {
     return documents.map(parseStoredDocument)
   },
 
-  async getDocument(id: string): Promise<StoredDocument | undefined> {
-    const document = await requestFromStore<StoredDocument | undefined>('readonly', (store) => store.get(id))
-    return document ? parseStoredDocument(document) : undefined
-  },
-
   async saveDocument(document: StoredDocument): Promise<void> {
     const validated = parseStoredDocument(document)
     await requestFromStore<IDBValidKey>('readwrite', (store) => store.put(validated))
   },
 
-  async deleteDocument(id: string): Promise<void> {
-    const validatedId = documentSchema.shape.id.parse(id)
-    await requestFromStore<undefined>('readwrite', (store) => store.delete(validatedId))
-  },
 }

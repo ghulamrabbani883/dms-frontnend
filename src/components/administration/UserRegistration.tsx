@@ -30,7 +30,6 @@ const UserRegistration = () => {
         <div>
           <span className="eyebrow">REGISTER</span>
           <h2>Register a user</h2>
-          <p>Set up a username and password for a new member.</p>
         </div>
         <span className="admin-avatar">♙</span>
       </div>
@@ -63,7 +62,6 @@ const UserRegistration = () => {
           Create user <span aria-hidden="true">→</span>
         </button>
       </form>
-      <p className="demo-note">This static admin form is for demonstration only. No credentials are sent or stored.</p>
     </section>
   )
 }
