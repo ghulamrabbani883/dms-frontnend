@@ -1,6 +1,8 @@
 import { memo, useEffect, useRef, useState, type FormEvent } from 'react'
 import { categories, uploadSchema, type UploadInput } from '../../types/documents'
 import TagInput from '../common/TagInput'
+import { extractTextFromFile } from '../../utils/fileToText'
+import { suggestDocumentTags } from '../../utils/suggestDocumentTags'
 
 type UploadFormProps = {
   onUpload: (input: UploadInput) => void
@@ -18,42 +20,48 @@ const UploadForm = memo(({ onUpload, isUploading }: UploadFormProps) => {
   const [autoTagSuggestions, setAutoTagSuggestions] = useState<string[]>([])
   const [autoTagMessage, setAutoTagMessage] = useState('')
   const fileInput = useRef<HTMLInputElement>(null)
-  const autoTagWorker = useRef<Worker | null>(null)
+  const analysisAbort = useRef<AbortController | null>(null)
+  const analysisId = useRef(0)
 
-  useEffect(() => () => autoTagWorker.current?.terminate(), [])
+  useEffect(() => () => {
+    analysisId.current += 1
+    analysisAbort.current?.abort()
+  }, [])
 
   const selectFile = (selectedFile: File) => {
+    const currentAnalysisId = ++analysisId.current
+    analysisAbort.current?.abort()
+    const controller = new AbortController()
+    analysisAbort.current = controller
     setFile(selectedFile)
-    setAutoTagSuggestions([])
-    setAutoTagMessage('Analyzing filename for suggested tags…')
-    autoTagWorker.current?.terminate()
-    autoTagWorker.current = null
+    const filenameSuggestions = suggestDocumentTags(selectedFile.name, '')
+    setAutoTagSuggestions(filenameSuggestions)
+    setAutoTagMessage('Analyzing file contents locally…')
 
-    try {
-      const worker = new Worker(new URL('../../workers/autoTag.worker.ts', import.meta.url), { type: 'module' })
-      autoTagWorker.current = worker
-      worker.onmessage = (event: MessageEvent<{ tags: string[]; metadata: string }>) => {
-        if (autoTagWorker.current !== worker) return
-        autoTagWorker.current = null
-        worker.terminate()
-        setAutoTagSuggestions(event.data.tags)
-        setAutoTagMessage(event.data.tags.length
-          ? `Suggested from filename · ${event.data.metadata}`
-          : `No obvious tags found · ${event.data.metadata}`)
+    const isCurrentAnalysis = () => analysisId.current === currentAnalysisId
+
+    void (async () => {
+      try {
+        const { text, summary } = await extractTextFromFile(
+          selectedFile,
+          setAutoTagMessage,
+          controller.signal,
+        )
+        if (!isCurrentAnalysis()) return
+        const suggestions = suggestDocumentTags(selectedFile.name, text)
+        setAutoTagSuggestions(suggestions)
+        setAutoTagMessage(suggestions.length
+          ? `${summary}; extracted ${suggestions.length} tag suggestion(s) from the content.`
+          : `${summary}; no useful text terms were found. You can add tags manually.`)
+      } catch (analysisError) {
+        if (!isCurrentAnalysis()) return
+        console.error('Could not analyze the selected document for tag suggestions.', analysisError)
+        setAutoTagSuggestions(filenameSuggestions)
+        setAutoTagMessage('Could not read document content. Filename suggestions are shown; add tags manually.')
+      } finally {
+        if (analysisAbort.current === controller) analysisAbort.current = null
       }
-      worker.onerror = () => {
-        if (autoTagWorker.current !== worker) return
-        autoTagWorker.current = null
-        worker.terminate()
-        setAutoTagMessage('Could not generate tag suggestions. Add tags manually.')
-      }
-      worker.postMessage({ name: selectedFile.name, mimeType: selectedFile.type, size: selectedFile.size })
-    } catch (workerError) {
-      autoTagWorker.current?.terminate()
-      autoTagWorker.current = null
-      console.error('Could not start the upload tag suggestion worker.', workerError)
-      setAutoTagMessage('Could not generate tag suggestions. Add tags manually.')
-    }
+    })()
   }
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
@@ -138,10 +146,14 @@ const UploadForm = memo(({ onUpload, isUploading }: UploadFormProps) => {
             inputLabel="Add document tags"
             placeholder={tags.length ? 'Add another…' : 'Type a tag and press Enter'}
             existingTags={autoTagSuggestions}
+            showAllSuggestions
+            maxSuggestions={15}
+            suggestionsEnabled={Boolean(file)}
             fetchOnMount
+            maxTags={15}
           />
-          <span className="auto-tag-message" role="status">{autoTagMessage}</span>
-          <span className="field-hint">Suggestions are simulated from the filename and file metadata; file contents are not read.</span>
+          {file && <span className="auto-tag-message" role="status">{autoTagMessage}</span>}
+          {file && <span className="field-hint">Text is analyzed on this device. PDFs use embedded text when available and OCR for scanned pages; OCR supports English.</span>}
         </label>
         <label className="field field-wide">
           <span>Remarks <small>Optional</small></span>

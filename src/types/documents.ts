@@ -20,7 +20,7 @@ export const uploadSchema = z.object({
   date: z.string().date(),
   category: z.enum(['Personal', 'Professional']),
   minorHead: z.string().min(1, 'Choose a name or department.'),
-  tags: z.array(z.string().min(1)),
+  tags: z.array(z.string().min(1)).max(15, 'Choose no more than 15 tags.'),
   remarks: z.string().max(500, 'Remarks must be 500 characters or fewer.'),
 })
 

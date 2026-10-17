@@ -11,6 +11,10 @@ type TagInputProps = {
   placeholder: string
   existingTags?: string[]
   fetchOnMount?: boolean
+  showAllSuggestions?: boolean
+  suggestionsEnabled?: boolean
+  maxTags?: number
+  maxSuggestions?: number
 }
 
 const TagInput = memo(({
@@ -20,25 +24,41 @@ const TagInput = memo(({
   placeholder,
   existingTags = [],
   fetchOnMount = false,
+  showAllSuggestions = false,
+  suggestionsEnabled = true,
+  maxTags,
+  maxSuggestions,
 }: TagInputProps) => {
   const [input, setInput] = useState('')
   const debouncedInput = useDebounce(input.trim(), 300)
   const tagQuery = useQuery({
     queryKey: ['document-tags', debouncedInput],
     queryFn: () => tagService.search(debouncedInput),
-    enabled: Boolean(getApiToken()) && (fetchOnMount || debouncedInput.length > 1),
+    enabled: suggestionsEnabled && Boolean(getApiToken()) && (fetchOnMount || debouncedInput.length > 1),
     staleTime: 30_000,
   })
-  const suggestions = useMemo(() => [...new Set([
-    ...(tagQuery.data ?? []),
-    ...existingTags,
-  ])].filter((tag) => !tags.some((current) => current.toLowerCase() === tag.toLowerCase())
-    && (!debouncedInput || tag.toLowerCase().includes(debouncedInput.toLowerCase()))),
+  const suggestions = useMemo(() => {
+    const backendTags = tagQuery.data ?? []
+    const combined = Array.from(
+      { length: Math.max(backendTags.length, existingTags.length) },
+      (_, index) => [backendTags[index], existingTags[index]],
+    ).flat()
+    return [...new Set(combined.filter((tag): tag is string => Boolean(tag)))]
+      .filter((tag) => !tags.some((current) => current.toLowerCase() === tag.toLowerCase())
+        && (!debouncedInput || tag.toLowerCase().includes(debouncedInput.toLowerCase())))
+  },
   [debouncedInput, existingTags, tagQuery.data, tags])
+  const atTagLimit = maxTags !== undefined && tags.length >= maxTags
+  const suggestionLimit = maxSuggestions ?? (showAllSuggestions ? suggestions.length : 4)
+  const visibleSuggestions = atTagLimit ? [] : suggestions.slice(0, suggestionLimit)
 
   const addTag = (value: string) => {
     const tag = value.trim().replace(/^#/, '')
-    if (tag && !tags.some((current) => current.toLowerCase() === tag.toLowerCase())) {
+    if (
+      tag
+      && !tags.some((current) => current.toLowerCase() === tag.toLowerCase())
+      && (maxTags === undefined || tags.length < maxTags)
+    ) {
       onChange([...tags, tag])
     }
     setInput('')
@@ -71,15 +91,19 @@ const TagInput = memo(({
         <input
           aria-label={inputLabel}
           value={input}
-          placeholder={placeholder}
+          placeholder={maxTags !== undefined && tags.length >= maxTags ? `Maximum ${maxTags} tags` : placeholder}
+          disabled={maxTags !== undefined && tags.length >= maxTags}
           onChange={(event) => setInput(event.target.value)}
           onKeyDown={handleKeyDown}
         />
       </div>
-      {(tagQuery.isError || suggestions.length > 0) && (
+      {atTagLimit && (
+        <span className="field-hint" role="status">Maximum of {maxTags} tags reached. Remove a tag to add another.</span>
+      )}
+      {suggestionsEnabled && (tagQuery.isError || visibleSuggestions.length > 0) && (
         <span className="field-hint">
           {tagQuery.isError && <span role="status">Could not fetch saved tags. </span>}
-          {suggestions.length > 0 && <>Suggested: {suggestions.slice(0, 4).map((tag) => (
+          {visibleSuggestions.length > 0 && <>Suggested (up to {suggestionLimit}): {visibleSuggestions.map((tag) => (
             <button className="suggestion" type="button" key={tag} onClick={() => addTag(tag)}>+ {tag}</button>
           ))}</>}
         </span>

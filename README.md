@@ -24,7 +24,7 @@ Open the local URL printed by Vite (usually `http://localhost:5173`). To stop th
 - **Keep working through connection issues:** The app shows network status and caches recent search results locally for authenticated sessions.
 - **Sign in with OTP:** Request and validate a one-time passcode through the Allsoft authentication API. The returned token is used for authenticated document requests.
 - **Administration demo:** The Administration page includes a validated user-registration form. It is a static demo and does not create users on the backend.
-- **Bonus smart features:** Search with plain-language phrases and get filename-based tag suggestions when uploading. See [BONUS_FEATURES_README.md](./BONUS_FEATURES_README.md) for examples, behavior, and limitations.
+- **Bonus AI/ML features:** See [BONUS_FEATURES_README.md](./BONUS_FEATURES_README.md).
 - **Responsive layout:** Workspace navigation and document tools adapt to smaller screens.
 
 ## Project structure
@@ -55,7 +55,6 @@ src/
 │   ├── api.ts
 │   ├── authService.ts
 │   ├── documentService.ts
-│   ├── naturalLanguageSearch.ts
 │   └── tagService.ts
 ├── storage/
 │   ├── indexedDb.ts
@@ -64,9 +63,10 @@ src/
 │   ├── documents.ts
 │   └── search.ts
 ├── utils/
-│   └── formatFileSize.ts
+│   ├── fileToText.ts
+│   ├── formatFileSize.ts
+│   └── suggestDocumentTags.ts
 ├── workers/
-│   ├── autoTag.worker.ts
 │   └── zip.worker.ts
 ├── assets/
 │   ├── hero.png

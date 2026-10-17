@@ -15,9 +15,11 @@
     "@tanstack/react-virtual": "^3.14.20",
     "chrono-node": "^2.10.3",
     "fflate": "^0.8.3",
+    "pdfjs-dist": "^6.4.299",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "react-hook-form": "^7.90.0",
+    "tesseract.js": "^7.0.0",
     "zod": "^3.25.76"
   },
   "devDependencies": {
